@@ -109,34 +109,32 @@ class CommandProtocol(LineOnlyReceiver):
         finally:
             cursor.close()
             
-    def validGuest(self, guestHash):
-        timeStamp = str(long(time.time() / 30))
+    def validGuest(self, guestID):
+#        timeStamp = str(long(time.time() / 30))
         if self.isKey or (not self.Validated):
             return False
         try:
             self.factory.conn.ping(True)
             cursor = self.factory.conn.cursor()
-            cursor.execute('''SELECT *
-                            FROM `guests`
-                            WHERE `Lock` = "%s"
-                            AND `ValidTo` >= NOW()
-                            AND `ValidFrom` <= NOW()''' % self.getName()) 
+            cursor.execute('''
+                            SELECT `hash` FROM `guests` 
+                            WHERE 
+                            (`ValidFrom` <= NOW()) AND (`ValidTo` >= NOW())
+                            AND (`Lock` = '%s')
+                            AND (`guestID` = '%s')
+                            ''' 
+                            % (self.getName(),guestID)) 
             
             rows = cursor.fetchall()
             cursor.close()
-            for row in rows:
-#                print "TimeStamp = %s; Code = %s" % (timeStamp,row[0])
-                hashCode = hmac.new(key=timeStamp, msg=row[0], digestmod=hashlib.sha1).hexdigest()[-8:]
-#                print "Hash = %s, GuestHash = %s" % (hash,guestHash)
-#                print hash.strip() == guestHash.strip()
-                if hashCode == guestHash:
-                    return row[0]
-            return None
+            if len(rows):
+                return rows[0][0]
+            else:
+                return False 
             
         except Error as e:
             print(e)
             return False
-
 
     def getName(self): 
         if self.name!="": 
@@ -242,15 +240,15 @@ class CommandProtocol(LineOnlyReceiver):
 #                print self.getName() + " still online"
             elif cmnd[0]=="GUEST":
                 if len(cmnd) > 1:
-                    #print line
-                    guestID = self.validGuest(cmnd[1].strip())
-                    if guestID: 
-                        self.sendLine("OPEN:GUEST")
+                    print line
+                    guestHash = self.validGuest(cmnd[1])
+                    if guestHash: 
+                        self.sendLine("GUEST:%s" % guestHash)
                         self.lastComandTime = time.time()
-                        print "Guest ID: " + guestID + " has opened Lock ID: " + self.getName() 
+                        print "Guest ID: " + cmnd[1] + " has opened Lock ID: " + self.getName() 
                     else:
-                        self.sendLine("NO:GUEST")
-                        print "Incorrect hash: " + cmnd[1] + " for access to Lock ID: " + self.getName()
+                        #self.sendLine("GUEST")
+                        print "Incorrect guest: " + cmnd[1] + " for access to Lock ID: " + self.getName()
                     
             else: 
                 if (cmnd[0] in allowAnswers) & (len(cmnd) > 1):
@@ -337,9 +335,6 @@ def sendCommand(lockID, command, clientIP):
     factory.conn.commit()
     cursor.close()
     return commandID
-
-
-
 
 def confirmCode(lockID, codeAnswer):
     adresat = factory.clients.get(str(lockID),None)
