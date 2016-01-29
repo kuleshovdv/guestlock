@@ -7,14 +7,16 @@ import hmac
 import random
 import time
 
-host = 'localhost'
-port = 12345
+host = '176.109.105.70'
+port = 443
 
 lockID = 'OL6KSD82JN3'
 lockPass = 'dErPaRoL'
 lockSecret = 'dErPaRoL'
 
-allowCommand = ("OPEN", "ACTIVATE", "DEACTIVATE")
+guestPass = ''
+
+allowCommand = ("OPEN", "ACTIVATE", "DEACTIVATE", "GUEST")
 statusRequest = ("DOOR", "STATUS")
 
 
@@ -47,19 +49,28 @@ def reciveData(socetToServer):
     while True:
         try:
             answer = socetToServer.recv(1024).strip()
+            print "$ " + answer
+            cmnd = answer.split(":")
+            
             if answer:
-                if answer == "PING":
+                if cmnd[0] == "PING":
                     #print "It was ping signal"
                     socetToServer.send("/PONG\r\n")
-                else:
                     print "$ " + answer
                     cmnd = answer.split(":")
-                    if cmnd[0] == "ANSW":
-                        #print "> /ANSW:%s\r\n" % hmac.new(key="dErPaRoL", msg=cmnd[1], digestmod=hashlib.sha1).hexdigest()
-                        socetToServer.send("/ANSW:%s\r\n" % hmac.new(key=lockPass, msg=cmnd[1], digestmod=hashlib.sha1).hexdigest())
-                        pass
-                    #print cmnd
-                    if cmnd[0] in allowCommand + statusRequest:
+                elif cmnd[0] == "ANSW":
+                    #print "> /ANSW:%s\r\n" % hmac.new(key="dErPaRoL", msg=cmnd[1], digestmod=hashlib.sha1).hexdigest()
+                    socetToServer.send("/ANSW:%s\r\n" % hmac.new(key=lockPass, msg=cmnd[1], digestmod=hashlib.sha1).hexdigest())
+                    pass
+                #print cmnd
+                elif cmnd[0] in allowCommand + statusRequest:
+                    if cmnd[0] == "GUEST":
+                        if cmnd[1] == hmac.new(key=lockSecret, msg=guestPass, digestmod=hashlib.sha1).hexdigest():
+                            print "WELCOME!!!"
+                        else:
+                            print "GET OUT"        
+                    elif validateServer(socetToServer, cmnd[1]):
+                        print "Server VALID"
                         report = "OK"
                         if cmnd[0] == "DOOR":
                             report = "CLOSE"
@@ -71,24 +82,18 @@ def reciveData(socetToServer):
                         elif cmnd[0] == "ACTIVATE":
                             lockActive = True
                         elif cmnd[0] == "DEACTIVATE":
-                            lockActive = False     
-                        
-                        if cmnd[0] in allowCommand:
-                            if validateServer(socetToServer, cmnd[1]):
-                                print "Server VALID"
-                            else:
-                                print "Server NOT valid"
-                                report = "NO"
-                        
+                            lockActive = False
                         if len(cmnd) > 1:
                             print "> /%s:%s\r\n" % (report, cmnd[1])
                             socetToServer.send("/%s:%s\r\n" % (report, cmnd[1]))
                         else:
                             socetToServer.send("/%s:\r\n" % report) 
+                    else:
+                        print "Server NOT valid"                        
         except:
             print "Connection lost"
             break
-        
+
 
 socetToServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -107,13 +112,11 @@ while True:
     if commandString == "exit":
         break
     command = commandString.split(":")
-    if (command[0] == "/GUEST") and (len(command) > 1):
-        timeStamp = str(long(time.time()/30))
-        print ("Timestamp = : %s" % timeStamp)
-        command[1] = hmac.new(key=timeStamp, msg=command[1], digestmod=hashlib.sha1).hexdigest()[-8:]
-        commandString = ":".join(command)
-        print ">> " + commandString 
-        
+     
+    if (command[0] == "/GUEST") and (len(command) > 2):
+        guestPass = command[2]
+        commandString = ':'.join(command[:2])
+        print commandString 
     socetToServer.send(commandString+"\r\n")
 
 socetToServer.close()

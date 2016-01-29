@@ -6,11 +6,12 @@ import hashlib
 import hmac
 import time
 
-lockID = 'YJK7RS7S5L5'
-lockSecret = 'password'
+lockID = 'OL6KSD82JN3'
+lockSecret = 'dErPaRoL'
+url = "http://176.109.105.70:8088/"
 
 def jsonCall(procName, *args):
-    url = "http://192.168.1.7:8081/"
+    
     headers = {'content-type': 'application/json'}
     payload = {
         "method": procName,
@@ -24,12 +25,12 @@ def jsonCall(procName, *args):
     return response["result"]
 
 def main():
-    commandID = jsonCall('status', lockID)
+    commandID = jsonCall('open', lockID)
     sessionID = jsonCall('getSessionKey', commandID)
     if sessionID:
         hashCode = hmac.new(key=str(sessionID), msg=lockSecret, digestmod=hashlib.sha1).hexdigest()
         jsonCall('confirmCode', lockID, hashCode)
-    time.sleep(0.1)
+    #time.sleep(0.1)
     print jsonCall('getResult', commandID)
     
          
